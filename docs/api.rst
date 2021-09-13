@@ -20,9 +20,11 @@ PluginManager Object
     .. automethod:: _hep_handler
     .. automethod:: _bep_handler
     .. automethod:: _vep_handler
+    .. automethod:: _cvep_handler
     .. automethod:: _filter_handler
     .. automethod:: _error_handler
     .. automethod:: _context_processor_handler
+    .. automethod:: _p3_handler
     .. attribute:: _dcp_manager
 
         the instance of :class:`~flask_pluginkit.utils.DcpManager`
@@ -62,13 +64,6 @@ Storage Objects
     .. attribute:: index
 
         The default index, as the only key, you can override it.
-
-.. autoclass:: MongoStorage
-    :members:
-
-    .. attribute:: index
-
-        The default index, as the default database, you can override it.
 
 Useful Functions and Classes
 ----------------------------

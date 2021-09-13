@@ -13,8 +13,13 @@ application, no different from the normal blueprint.
 
 The plugin needs to return the bep field via register. The bep data type
 returned is a dictionary with the format
-{blueprint: Blueprint Instance, prefix: /your_blueprint_url_prefix}.
+{blueprint: Blueprint Instance, prefix: /your_blueprint_url_prefix, parent: Name}.
 Only one blueprint is currently supported.
+
+.. versionchanged:: 3.6.2
+
+    Support Flask2.0 nested blueprint with the `parent` param(beta).
+    But only blueprints of other plugins can be nested.
 
 The Flask-PluginKit loads bep via
 :meth:`~flask_pluginkit.PluginManager._bep_handler`, this method will
@@ -26,6 +31,9 @@ as long as the prefix is legal.
 
 The user only needs to ensure that the plugin is harmless and does not
 pollute your original application. Others are plugin developers.
+
+If you just want to add the view to the existing blueprint,
+you can refer to :ref:`vep-on-blueprint`
 
 Example
 -------

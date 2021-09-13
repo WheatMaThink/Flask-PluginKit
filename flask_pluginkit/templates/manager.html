@@ -5,10 +5,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Plugins Web Manager based Flask-PluginKit!</title>
-    <link href="{{ url_for('.static', filename='favicon.png') }}" rel="icon" type="image/x-icon" />
-    <link href="{{ url_for('.static', filename='favicon.png') }}" rel="shortcut icon" type="image/x-icon" />
+    <link href="https://static.saintic.com/cdn/flask-pluginkit/favicon.ico" rel="icon" type="image/x-icon" />
+    <link href="https://static.saintic.com/cdn/flask-pluginkit/favicon.ico" rel="shortcut icon" type="image/x-icon" />
     <link rel="prefetch" type="application/l10n" href="{{ url_for('.static', filename='translations.ini') }}" />
-    <link rel="stylesheet" href="{{ url_for('.static', filename='bulma-0.7.5.min.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
     <link rel="stylesheet" type="text/css" href="https://static.saintic.com/cdn/iconfont/iconfont.css">
     <style type="text/css">
         .notification>button.delete {
@@ -154,8 +154,8 @@
             </div>
         </div>
     </section>
-    <script type="text/javascript" src="{{ url_for('.static', filename='jquery-3.4.1.min.js') }}"></script>
-    <script type="text/javascript" src="{{ url_for('.static', filename='l10.min.js') }}"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/webl10n@1.0.0/l10n.min.js"></script>
     <script type="text/javascript">
         function showNotification() {
             document.getElementById("notification").style.display = 'block';
@@ -248,6 +248,20 @@
             document.documentElement.dir = document.webL10n.getDirection();
         }, false);
 
+        let isLoop = 0;
+        function getLoopMsg() {
+            if (isLoop === 1) {
+                return;
+            }
+            isLoop = 1;
+            let sse = new EventSource("{{ url_for('.msg') }}");
+            sse.onmessage = function(e) {
+                if (e.data !== "") {
+                    setMessage("<scan>" + e.data + "</scan>");
+                }
+            }
+        }
+
         $('#upload-plugin-submit').click(function () {
             var form = new FormData();
             var file = document.getElementById("file");
@@ -301,6 +315,7 @@
                     setMessage(
                         "<scan class='has-text-primary'>Already submitted installation task.</scan>"
                     );
+                    getLoopMsg();
                 }, {
                     data: {
                         package_or_url: package_or_url
@@ -312,15 +327,6 @@
             }
         });
 
-        setInterval(function () {
-            ajax("{{ url_for('.msg') }}", function (res) {
-                if (res.msg) {
-                    setMessage("<scan>" + res.msg + "</scan>");
-                }
-            }, {
-                method: 'get'
-            });
-        }, 5000);
     </script>
 </body>
 

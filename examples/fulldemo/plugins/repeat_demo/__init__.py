@@ -9,11 +9,12 @@
     :license: BSD, see LICENSE for more details.
 """
 
-from flask import abort, jsonify
+from flask import abort, jsonify, request
+from flask_classful import FlaskView
 
 __plugin_name__ = "repeatdemo"
 __author__ = "Mr.tao <staugur@saintic.com>"
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def view_abort_403():
@@ -25,7 +26,6 @@ def permission_deny(error):
 
 
 class ApiError(Exception):
-
     def __init__(self, code, message, status_code=200):
         super(ApiError, self).__init__()
         self.code = code
@@ -47,16 +47,27 @@ def raise_api_error_view():
     raise ApiError(10000, "test_err_class_handler")
 
 
+class ClassfulView(FlaskView):
+    def index(self):
+        return "test"
+
+
+def bvep_view():
+    return request.endpoint
+
+
 def register():
     return {
-        'vep': [
-            dict(rule='/403', view_func=view_abort_403),
-            dict(rule='/api_error', view_func=raise_api_error_view)
+        "cvep": dict(view_class=ClassfulView),
+        "vep": [
+            dict(rule="/403", view_func=view_abort_403),
+            dict(rule="/api_error", view_func=raise_api_error_view),
+            dict(rule="/bvep", view_func=bvep_view, _blueprint="localdemo"),
         ],
-        'filter': dict(repeat_filter=lambda x: 'test-filter-repeat'),
-        'errhandler': [
+        "filter": dict(repeat_filter=lambda x: "test-filter-repeat"),
+        "errhandler": [
             dict(error=403, handler=permission_deny),
-            dict(error=ApiError, handler=handle_api_error)
+            dict(error=ApiError, handler=handle_api_error),
         ],
-        'tcp': dict(change_to_str=str),
+        "tcp": dict(change_to_str=str),
     }

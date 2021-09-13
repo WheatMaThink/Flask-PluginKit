@@ -1,5 +1,67 @@
 .. currentmodule:: flask-pluginkit
 
+v3.7.1
+------
+
+Released in 2021-09-07
+
+Restore translations.ini
+
+v3.7.0
+------
+
+Released in 2021-09-02
+
+- feat: add :ref:`p3`, is beta
+- chore: the stpl_reverse falls into stpl
+- deprecated: will remove the try_compatible and stpl_reverse in :class:`~flask_pluginkit.PluginManager`
+- misc: remove web static files(change to CDN)
+
+v3.6.2
+------
+
+Released in 2021-06-22
+
+- chore: compatible with flask 2.0 nested blueprints, but only supports blueprints of nested plugins
+- fix ci(deploy pypi) & update docs
+
+v3.6.1
+------
+
+Released in 2021-06-22
+
+- ci tests from travis to github action
+- chore: web message api with SSE, page with CDN
+
+v3.6.0
+------
+
+Released in 2020-12-31
+
+- feat: add :ref:`vep-on-blueprint`, is beta
+- feat: the :meth:`~flask_pluginkit.PluginManager.emit_assets` add _external
+- fix: semver.compare and semver.parse
+- update docs & test case, example
+- deprecated: MongoStorage
+
+v3.5.0
+------
+
+Released in 2020-04-08
+
+- feat: add class-based view extension point (beta, use Flask-Classful) 
+- chore: web plugin manager page setInterval (called as needed)
+- update docs & test case, example
+
+v3.4.1
+------
+
+Released in 2020-03-25
+
+- feat: add :meth:`~flask_pluginkit.LocalStorage.setmany`
+- feat: add :meth:`~flask_pluginkit.RedisStorage.setmany`
+- fix: update result(original) :meth:`~flask_pluginkit.RedisStorage.get`
+
 v3.4.0
 ------
 

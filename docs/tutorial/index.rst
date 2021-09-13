@@ -17,12 +17,14 @@ and cover as much as possible of all the features of Flask-PluginKit.
     hep
     bep
     vep
+    cvep
     config
     static
     errhandler
     filter
     tcp
     dcp
+    p3
     third-party-plugin
     afterword
 

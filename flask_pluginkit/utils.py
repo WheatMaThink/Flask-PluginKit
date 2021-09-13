@@ -9,14 +9,15 @@
     :license: BSD 3-Clause, see LICENSE for more details.
 """
 
+import json
 import shelve
-import semver
-from os.path import join
+from semver import VersionInfo
+from os.path import join, abspath
 from tempfile import gettempdir
 from collections import deque
 from flask import Markup, Response, jsonify
 from flask.app import setupmethod, Flask as _BaseFlask
-from ._compat import PY2, string_types, text_type
+from ._compat import PY2, string_types, text_type, iteritems
 from .exceptions import PluginError, NotCallableError
 
 
@@ -25,10 +26,12 @@ def isValidPrefix(prefix, allow_none=False):
     if prefix is None and allow_none is True:
         return True
     if isinstance(prefix, string_types):
-        return prefix.startswith('/') and \
-            not prefix.endswith('/') and \
-            '//' not in prefix and \
-            ' ' not in prefix
+        return (
+            prefix.startswith("/")
+            and not prefix.endswith("/")
+            and "//" not in prefix
+            and " " not in prefix
+        )
     return False
 
 
@@ -37,12 +40,7 @@ def isValidSemver(version):
     The format is MAJOR.Minor.PATCH, more with https://semver.org
     """
     if version and isinstance(version, string_types):
-        try:
-            semver.parse(version)
-        except (TypeError, ValueError):
-            return False
-        else:
-            return True
+        return VersionInfo.isvalid(version)
     return False
 
 
@@ -50,14 +48,17 @@ def sortedSemver(versions, sort="ASC"):
     """Semantically sort the list of version Numbers"""
     reverse = True if sort.upper() == "DESC" else False
     if versions and isinstance(versions, (list, tuple)):
+
+        def compare(ver1, ver2):
+            v1 = VersionInfo.parse(ver1)
+            return v1.compare(ver2)
+
         if PY2:
-            return sorted(versions, cmp=semver.compare, reverse=reverse)
+            return sorted(versions, cmp=compare, reverse=reverse)
         else:
             from functools import cmp_to_key
-            return sorted(
-                versions, key=cmp_to_key(semver.compare),
-                reverse=reverse
-            )
+
+            return sorted(versions, key=cmp_to_key(compare), reverse=reverse)
     else:
         raise TypeError("Invaild versions, a list or tuple is right.")
 
@@ -70,10 +71,29 @@ class BaseStorage(object):
 
     This base class customizes the `__getitem__`, `__setitem__`
     and `__delitem__` methods so that the user can call it like a dict.
+
+    .. versionchanged:: 3.4.1
+        Change :attr:`index` to :attr:`DEFAULT_INDEX`
     """
 
     #: The default index, as the only key, you can override it.
-    index = "flask_pluginkit_dat"
+    DEFAULT_INDEX = "flask_pluginkit_dat"
+
+    @property
+    def index(self):
+        """Get the final index
+
+        .. versionadded:: 3.4.1
+        """
+        return getattr(self, "COVERED_INDEX", None) or self.DEFAULT_INDEX
+
+    @index.setter
+    def index(self, _covered_index):
+        """Set the covered index
+
+        .. versionadded:: 3.6.0
+        """
+        self.COVERED_INDEX = _covered_index
 
     def __getitem__(self, key):
         if hasattr(self, "get"):
@@ -95,7 +115,9 @@ class BaseStorage(object):
 
     def __str__(self):
         return "<%s object at %s, index is %s>" % (
-            self.__class__.__name__, hex(id(self)), self.index
+            self.__class__.__name__,
+            hex(id(self)),
+            self.index,
         )
 
     __repr__ = __str__
@@ -104,11 +126,15 @@ class BaseStorage(object):
 class LocalStorage(BaseStorage):
     """Local file system storage based on the shelve module."""
 
+    def __init__(self, path=None):
+        self.COVERED_INDEX = path or join(gettempdir(), self.DEFAULT_INDEX)
+
     def _open(self, flag="c"):
         return shelve.open(
-            filename=join(gettempdir(), self.index),
+            filename=abspath(self.index),
             flag=flag,
-            protocol=2
+            protocol=2,
+            writeback=False,
         )
 
     @property
@@ -120,13 +146,20 @@ class LocalStorage(BaseStorage):
         db = None
         try:
             db = self._open(flag="r")
-        except:
+        except Exception:
             return dict()
         else:
             return dict(db)
         finally:
             if db:
                 db.close()
+
+    def __ck(self, key):
+        if PY2 and isinstance(key, text_type):
+            key = key.encode("utf-8")
+        if not PY2 and not isinstance(key, text_type):
+            key = key.decode("utf-8")
+        return key
 
     def set(self, key, value):
         """Set persistent data with shelve.
@@ -139,14 +172,25 @@ class LocalStorage(BaseStorage):
 
         :returns:
         """
-        db = self._open()
+        db = None
         try:
-            if PY2 and isinstance(key, text_type):
-                key = key.encode("utf-8")
-            if not PY2 and not isinstance(key, text_type):
-                key = key.decode("utf-8")
-            db[key] = value
+            db = self._open()
+            db[self.__ck(key)] = value
         finally:
+            if db:
+                db.close()
+
+    def setmany(self, **mapping):
+        """Set more data
+
+        :param mapping: the more k=v
+
+        .. versionadded:: 3.4.1
+        """
+        if mapping and isinstance(mapping, dict):
+            db = self._open()
+            for k, v in iteritems(mapping):
+                db[self.__ck(k)] = v
             db.close()
 
     def get(self, key, default=None):
@@ -160,6 +204,10 @@ class LocalStorage(BaseStorage):
             return default
         else:
             return value
+
+    def remove(self, key):
+        db = self._open()
+        del db[key]
 
     def __len__(self):
         return len(self.list)
@@ -184,15 +232,34 @@ class RedisStorage(BaseStorage):
     @property
     def list(self):
         """list redis hash data"""
-        return self._db.hgetall(self.index)
+        return {
+            k: json.loads(v)
+            for k, v in iteritems(self._db.hgetall(self.index))
+        }
 
     def set(self, key, value):
         """set key data"""
-        return self._db.hset(self.index, key, value)
+        return self._db.hset(self.index, key, json.dumps(value))
+
+    def setmany(self, **mapping):
+        """Set more data
+
+        :param mapping: the more k=v
+
+        .. versionadded:: 3.4.1
+        """
+        if mapping and isinstance(mapping, dict):
+            mapping = {k: json.dumps(v) for k, v in iteritems(mapping)}
+            return self._db.hmset(self.index, mapping)
 
     def get(self, key, default=None):
-        """get key data from redis"""
-        return self._db.hget(self.index, key) or default
+        """get key original data from redis"""
+        v = self._db.hget(self.index, key)
+        if v:
+            if not PY2 and not isinstance(v, text_type):
+                v = v.decode("utf-8")
+            return json.loads(v)
+        return default
 
     def remove(self, key):
         """delete key from redis"""
@@ -200,33 +267,6 @@ class RedisStorage(BaseStorage):
 
     def __len__(self):
         return self._db.hlen(self.index)
-
-
-class MongoStorage(BaseStorage):
-    """Use mongodb stand-alone storage
-
-    .. versionadded:: 3.4.0
-    """
-
-    def __init__(self, mongo_url=None, mongo_connection=None):
-        self._db = self._open(mongo_url) if mongo_url else mongo_connection
-
-    def _open(self, mongo_url):
-        from pymongo import MongoClient
-        from pymongo.errors import ConfigurationError
-        client = MongoClient(mongo_url)
-        try:
-            client.get_default_database()
-        except ConfigurationError:
-            #: Now, self.index is a database name
-            self._db = client[self.index]
-        else:
-            self._db = client
-
-    @property
-    def db(self):
-        """Return the mongo connection"""
-        return self._db
 
 
 class JsonResponse(Response):
@@ -244,7 +284,6 @@ class JsonResponse(Response):
 
 
 class Flask(_BaseFlask):
-
     @setupmethod
     def before_request_top(self, f):
         """Registers a function to run before each request. Priority First.
@@ -280,7 +319,6 @@ class Attribution(dict):
 
 
 class DcpManager(object):
-
     def __init__(self):
         self._listeners = {}
 
@@ -342,7 +380,7 @@ class DcpManager(object):
                 rv = "".join(rv)
             if rv:
                 if not isinstance(rv, text_type):
-                    rv = rv.decode('utf-8')
+                    rv = rv.decode("utf-8")
                 results.append(rv)
         return Markup("".join(results))
 
@@ -352,7 +390,7 @@ def allowed_uploaded_plugin_suffix(filename):
 
     .. versionadded:: 3.3.0
     """
-    allow_suffix = ['.tar.gz', '.tgz', '.zip']
+    allow_suffix = [".tar.gz", ".tgz", ".zip"]
     if isinstance(filename, string_types):
         for suffix in allow_suffix:
             if filename.endswith(suffix):
@@ -369,13 +407,17 @@ def check_url(addr):
     .. versionadded:: 3.3.0
     """
     from re import compile, IGNORECASE
+
     regex = compile(
-        r'^(?:http)s?://'
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'
-        r'localhost|'
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
-        r'(?::\d+)?'
-        r'(?:/?|[/?]\S+)$', IGNORECASE)
+        r"^(?:http)s?://"
+        r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+"
+        r"(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|"
+        r"localhost|"
+        r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+        r"(?::\d+)?"
+        r"(?:/?|[/?]\S+)$",
+        IGNORECASE,
+    )
     if addr and isinstance(addr, string_types):
         if regex.match(addr):
             return True
