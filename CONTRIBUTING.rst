@@ -7,7 +7,6 @@ Feedback
 --------
 
 * The `issues <https://github.com/staugur/Flask-PluginKit/issues>`_ on GitHub.
-* The email for staugur@saintic.com
 
 Report a problem
 ----------------
@@ -42,8 +41,7 @@ Submit pull request
 
 * Write test cases and documentation.
 
-* Run the test ``make dev && make test`` using the pypy, py2.7,
-  and py3.6+ environments respectively.
+* Run the test ``make dev && make test`` using the py3.8+ environments respectively.
 
 * Generate the documentation ``make dev && make html``.
 
